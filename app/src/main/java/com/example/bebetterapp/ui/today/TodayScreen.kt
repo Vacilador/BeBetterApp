@@ -32,7 +32,6 @@ fun TodayScreen(
     vm: TodayViewModel,
     onOpenStats: () -> Unit = {}
 ) {
-    // Можно оставить (а можно позже убрать и перейти только на init{} в VM)
     LaunchedEffect(Unit) { vm.seed() }
 
     val habits by vm.habits.collectAsState()
