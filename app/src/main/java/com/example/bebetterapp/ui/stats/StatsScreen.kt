@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -29,15 +30,16 @@ fun StatsScreen(
     onBack: () -> Unit = {}
 ) {
     val stats by vm.stats.collectAsState()
+    val selectedRange by vm.selectedRange.collectAsState()
 
     LaunchedEffect(Unit) {
-        vm.loadLast7Days()
+        vm.loadStats()
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Статистика за 7 дней") }
+                title = { Text("Статистика") }
             )
         }
     ) { padding ->
@@ -54,6 +56,11 @@ fun StatsScreen(
                 Text("Назад")
             }
 
+            StatsRangeChips(
+                selectedRange = selectedRange,
+                onRangeSelected = { vm.loadStats(it) }
+            )
+
             LazyColumn(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
@@ -63,6 +70,50 @@ fun StatsScreen(
             }
         }
     }
+}
+
+@Composable
+private fun StatsRangeChips(
+    selectedRange: StatsViewModel.StatsRange,
+    onRangeSelected: (StatsViewModel.StatsRange) -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        StatsChip(
+            text = "7д",
+            selected = selectedRange == StatsViewModel.StatsRange.DAYS_7,
+            onClick = { onRangeSelected(StatsViewModel.StatsRange.DAYS_7) }
+        )
+        StatsChip(
+            text = "30д",
+            selected = selectedRange == StatsViewModel.StatsRange.DAYS_30,
+            onClick = { onRangeSelected(StatsViewModel.StatsRange.DAYS_30) }
+        )
+        StatsChip(
+            text = "Год",
+            selected = selectedRange == StatsViewModel.StatsRange.YEAR,
+            onClick = { onRangeSelected(StatsViewModel.StatsRange.YEAR) }
+        )
+        StatsChip(
+            text = "Всё",
+            selected = selectedRange == StatsViewModel.StatsRange.ALL,
+            onClick = { onRangeSelected(StatsViewModel.StatsRange.ALL) }
+        )
+    }
+}
+
+@Composable
+private fun StatsChip(
+    text: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    AssistChip(
+        onClick = onClick,
+        label = { Text(text) }
+    )
 }
 
 @Composable

@@ -135,4 +135,7 @@ class HabitRepository(
         val min = dayEntryDao.getMinDate() ?: LocalDate.now()
         return min to LocalDate.now()
     }
+    suspend fun getFirstEntryDate(): LocalDate? {
+        return dayEntryDao.getMinDate()
+    }
 }
