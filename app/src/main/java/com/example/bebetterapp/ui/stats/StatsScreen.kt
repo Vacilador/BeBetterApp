@@ -2,19 +2,24 @@ package com.example.bebetterapp.ui.stats
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.Button
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Done
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.Button
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -72,30 +77,35 @@ fun StatsScreen(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun StatsRangeChips(
     selectedRange: StatsViewModel.StatsRange,
     onRangeSelected: (StatsViewModel.StatsRange) -> Unit
 ) {
-    Row(
+    FlowRow(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         StatsChip(
             text = "7д",
             selected = selectedRange == StatsViewModel.StatsRange.DAYS_7,
             onClick = { onRangeSelected(StatsViewModel.StatsRange.DAYS_7) }
         )
+
         StatsChip(
             text = "30д",
             selected = selectedRange == StatsViewModel.StatsRange.DAYS_30,
             onClick = { onRangeSelected(StatsViewModel.StatsRange.DAYS_30) }
         )
+
         StatsChip(
             text = "Год",
             selected = selectedRange == StatsViewModel.StatsRange.YEAR,
             onClick = { onRangeSelected(StatsViewModel.StatsRange.YEAR) }
         )
+
         StatsChip(
             text = "Всё",
             selected = selectedRange == StatsViewModel.StatsRange.ALL,
@@ -110,9 +120,22 @@ private fun StatsChip(
     selected: Boolean,
     onClick: () -> Unit
 ) {
-    AssistChip(
+    FilterChip(
+        selected = selected,
         onClick = onClick,
-        label = { Text(text) }
+        label = {
+            Text(text)
+        },
+        leadingIcon = if (selected) {
+            {
+                Icon(
+                    imageVector = Icons.Filled.Done,
+                    contentDescription = null
+                )
+            }
+        } else {
+            null
+        }
     )
 }
 
