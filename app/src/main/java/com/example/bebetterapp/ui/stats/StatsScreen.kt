@@ -13,6 +13,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -36,15 +37,24 @@ fun StatsScreen(
     val selectedRange by vm.selectedRange.collectAsState()
 
     var sortOption by remember { mutableStateOf(StatsSortOption.BY_PERCENT) }
+    var hideEmpty by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         vm.loadStats()
     }
 
-    val sortedStats = remember(stats, sortOption) {
+    val visibleStats = remember(stats, hideEmpty) {
+        if (hideEmpty) {
+            stats.filter { it.checkedDays > 0 }
+        } else {
+            stats
+        }
+    }
+
+    val sortedStats = remember(visibleStats, sortOption) {
         when (sortOption) {
             StatsSortOption.BY_PERCENT -> {
-                stats.sortedWith(
+                visibleStats.sortedWith(
                     compareByDescending<HabitStat> { it.percent }
                         .thenByDescending { it.checkedDays }
                         .thenBy { it.titleRu }
@@ -52,7 +62,7 @@ fun StatsScreen(
             }
 
             StatsSortOption.BY_COMPLETIONS -> {
-                stats.sortedWith(
+                visibleStats.sortedWith(
                     compareByDescending<HabitStat> { it.checkedDays }
                         .thenByDescending { it.percent }
                         .thenBy { it.titleRu }
@@ -91,9 +101,15 @@ fun StatsScreen(
                 onSortSelected = { sortOption = it }
             )
 
+            HideEmptyToggle(
+                hideEmpty = hideEmpty,
+                onCheckedChange = { hideEmpty = it }
+            )
+
             if (sortedStats.isEmpty()) {
                 EmptyStatsState(
                     selectedRange = selectedRange,
+                    hideEmpty = hideEmpty,
                     modifier = Modifier.fillMaxWidth()
                 )
             } else {
@@ -182,6 +198,41 @@ private fun StatsSortChips(
 }
 
 @Composable
+private fun HideEmptyToggle(
+    hideEmpty: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                Text(
+                    text = "Скрыть пустые",
+                    style = MaterialTheme.typography.titleSmall
+                )
+                Text(
+                    text = "Не показывать привычки без выполнений за период",
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+
+            Switch(
+                checked = hideEmpty,
+                onCheckedChange = onCheckedChange
+            )
+        }
+    }
+}
+
+@Composable
 private fun StatsChip(
     text: String,
     selected: Boolean,
@@ -229,6 +280,7 @@ private fun StatRow(stat: HabitStat) {
 @Composable
 private fun EmptyStatsState(
     selectedRange: StatsViewModel.StatsRange,
+    hideEmpty: Boolean,
     modifier: Modifier = Modifier
 ) {
     val periodLabel = when (selectedRange) {
@@ -236,6 +288,12 @@ private fun EmptyStatsState(
         StatsViewModel.StatsRange.DAYS_30 -> "последние 30 дней"
         StatsViewModel.StatsRange.YEAR -> "последний год"
         StatsViewModel.StatsRange.ALL -> "всё время"
+    }
+
+    val message = if (hideEmpty) {
+        "После скрытия пустых привычек за период \"$periodLabel\" ничего не осталось."
+    } else {
+        "За период \"$periodLabel\" пока нет отметок по привычкам."
     }
 
     Card(
@@ -253,7 +311,7 @@ private fun EmptyStatsState(
             )
 
             Text(
-                text = "За период \"$periodLabel\" пока нет отметок по привычкам.",
+                text = message,
                 style = MaterialTheme.typography.bodyMedium
             )
 
