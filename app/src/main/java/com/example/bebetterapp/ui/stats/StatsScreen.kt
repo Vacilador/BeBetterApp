@@ -11,6 +11,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
@@ -247,31 +248,47 @@ private fun StatsChip(
 
 @Composable
 private fun StatRow(stat: HabitStat) {
+    val progress = if (stat.totalDays > 0) {
+        stat.checkedDays.toFloat() / stat.totalDays.toFloat()
+    } else {
+        0f
+    }
+
     Card(
         modifier = Modifier.fillMaxWidth()
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = stat.titleRu,
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    Text(
+                        text = "Выполнено: ${stat.checkedDays} из ${stat.totalDays} дней",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+
                 Text(
-                    text = stat.titleRu,
-                    style = MaterialTheme.typography.titleMedium
-                )
-                Text(
-                    text = "${stat.checkedDays} / ${stat.totalDays} дней",
-                    style = MaterialTheme.typography.bodyMedium
+                    text = "${stat.percent}%",
+                    style = MaterialTheme.typography.headlineSmall
                 )
             }
 
-            Text(
-                text = "${stat.percent}%",
-                style = MaterialTheme.typography.titleMedium
+            LinearProgressIndicator(
+                progress = { progress.coerceIn(0f, 1f) },
+                modifier = Modifier.fillMaxWidth()
             )
         }
     }
