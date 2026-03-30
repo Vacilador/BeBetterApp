@@ -5,17 +5,19 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
@@ -28,10 +30,15 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.example.bebetterapp.domain.model.DailyCompletionStat
 import com.example.bebetterapp.domain.model.HabitStat
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -40,6 +47,7 @@ fun StatsScreen(
     onBack: () -> Unit = {}
 ) {
     val stats by vm.stats.collectAsState()
+    val dailyStats by vm.dailyStats.collectAsState()
     val selectedRange by vm.selectedRange.collectAsState()
 
     var sortOption by remember { mutableStateOf(StatsSortOption.BY_PERCENT) }
@@ -112,6 +120,11 @@ fun StatsScreen(
                 onCheckedChange = { hideEmpty = it }
             )
 
+            DailyBarChart(
+                dailyStats = dailyStats,
+                modifier = Modifier.fillMaxWidth()
+            )
+
             if (sortedStats.isEmpty()) {
                 EmptyStatsState(
                     selectedRange = selectedRange,
@@ -122,13 +135,6 @@ fun StatsScreen(
                 LazyColumn(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    item {
-                        MiniStatsChart(
-                            stats = sortedStats,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-
                     items(sortedStats) { item ->
                         StatRow(item)
                     }
@@ -222,9 +228,11 @@ private fun HideEmptyToggle(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 12.dp, vertical = 10.dp),
-            horizontalArrangement = Arrangement.SpaceBetween
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
             Column(
+                modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
                 Text(
@@ -259,10 +267,12 @@ private fun StatsChip(
 }
 
 @Composable
-private fun MiniStatsChart(
-    stats: List<HabitStat>,
+private fun DailyBarChart(
+    dailyStats: List<DailyCompletionStat>,
     modifier: Modifier = Modifier
 ) {
+    val maxCount = dailyStats.maxOfOrNull { it.completedCount } ?: 0
+
     Card(modifier = modifier) {
         Column(
             modifier = Modifier
@@ -271,110 +281,128 @@ private fun MiniStatsChart(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text(
-                text = "График по привычкам",
+                text = "Выполнения по дням",
                 style = MaterialTheme.typography.titleMedium
             )
 
-            stats.forEach { stat ->
-                ChartBarRow(stat = stat)
+            if (dailyStats.isEmpty()) {
+                Text(
+                    text = "Нет данных для графика.",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                return@Column
+            }
+
+            Text(
+                text = "Каждый столбик — количество выполненных привычек за день",
+                style = MaterialTheme.typography.bodySmall
+            )
+
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(dailyStats) { day ->
+                    DayBar(
+                        stat = day,
+                        maxCount = maxCount
+                    )
+                }
             }
         }
     }
 }
 
 @Composable
-private fun ChartBarRow(stat: HabitStat) {
-    val progress = if (stat.totalDays > 0) {
-        stat.checkedDays.toFloat() / stat.totalDays.toFloat()
-    } else {
+private fun DayBar(
+    stat: DailyCompletionStat,
+    maxCount: Int
+) {
+    val barFraction = if (maxCount <= 0) {
         0f
+    } else {
+        stat.completedCount.toFloat() / maxCount.toFloat()
     }.coerceIn(0f, 1f)
 
+    val dayFormatter = remember {
+        DateTimeFormatter.ofPattern("dd", Locale.getDefault())
+    }
+
+    val monthFormatter = remember {
+        DateTimeFormatter.ofPattern("MM", Locale.getDefault())
+    }
+
     Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(
-                text = stat.titleRu,
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.widthIn(max = 220.dp)
-            )
-
-            Text(
-                text = "${stat.percent}%",
-                style = MaterialTheme.typography.labelLarge
-            )
-        }
+        Text(
+            text = stat.completedCount.toString(),
+            style = MaterialTheme.typography.labelSmall
+        )
 
         Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .height(12.dp)
+                .width(20.dp)
+                .height(120.dp)
                 .clip(MaterialTheme.shapes.small)
                 .background(MaterialTheme.colorScheme.surfaceVariant)
         ) {
             Box(
                 modifier = Modifier
-                    .fillMaxWidth(progress)
-                    .height(12.dp)
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .fillMaxHeight(barFraction)
                     .clip(MaterialTheme.shapes.small)
                     .background(MaterialTheme.colorScheme.primary)
             )
         }
 
         Text(
-            text = "${stat.checkedDays} из ${stat.totalDays} дней",
-            style = MaterialTheme.typography.bodySmall
+            text = stat.date.format(dayFormatter),
+            style = MaterialTheme.typography.labelSmall
+        )
+
+        Text(
+            text = stat.date.format(monthFormatter),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }
 
 @Composable
 private fun StatRow(stat: HabitStat) {
-    val progress = if (stat.totalDays > 0) {
-        stat.checkedDays.toFloat() / stat.totalDays.toFloat()
-    } else {
-        0f
-    }
-
     Card(
         modifier = Modifier.fillMaxWidth()
     ) {
-        Column(
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Top
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(end = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Text(
-                        text = stat.titleRu,
-                        style = MaterialTheme.typography.titleMedium
-                    )
-                    Text(
-                        text = "Выполнено: ${stat.checkedDays} из ${stat.totalDays} дней",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                }
-
                 Text(
-                    text = "${stat.percent}%",
-                    style = MaterialTheme.typography.headlineSmall
+                    text = stat.titleRu,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = "Выполнено: ${stat.checkedDays} из ${stat.totalDays} дней",
+                    style = MaterialTheme.typography.bodyMedium
                 )
             }
 
-            LinearProgressIndicator(
-                progress = { progress.coerceIn(0f, 1f) },
-                modifier = Modifier.fillMaxWidth()
+            Text(
+                text = "${stat.percent}%",
+                style = MaterialTheme.typography.headlineSmall
             )
         }
     }
