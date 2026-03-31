@@ -31,7 +31,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.example.bebetterapp.domain.model.CalendarDayDetails
 import com.example.bebetterapp.domain.model.CalendarDayHighlight
 import java.time.DayOfWeek
 import java.time.LocalDate
@@ -48,6 +50,7 @@ fun CalendarScreen(
     val currentMonth by vm.currentMonth.collectAsState()
     val selectedDate by vm.selectedDate.collectAsState()
     val dayHighlights by vm.dayHighlights.collectAsState()
+    val selectedDayDetails by vm.selectedDayDetails.collectAsState()
 
     val monthTitle = remember(currentMonth) {
         val formatter = DateTimeFormatter.ofPattern("LLLL yyyy", Locale("ru"))
@@ -136,34 +139,17 @@ fun CalendarScreen(
                 }
             }
 
-            Card(
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier.padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Text(
-                        text = "Выбранная дата",
-                        style = MaterialTheme.typography.labelLarge
-                    )
-
-                    Text(
-                        text = formatFullDate(selectedDate),
-                        style = MaterialTheme.typography.bodyLarge
-                    )
-
-                    TextButton(onClick = vm::goToToday) {
-                        Text("Перейти к сегодня")
-                    }
-                }
-            }
+            SelectedDayCard(
+                date = selectedDate,
+                details = selectedDayDetails,
+                onGoToToday = vm::goToToday
+            )
         }
     }
 }
 
 @Composable
-private fun WeekDaysHeader(cellWidth: androidx.compose.ui.unit.Dp) {
+private fun WeekDaysHeader(cellWidth: Dp) {
     val labels = listOf("Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс")
 
     Row(
@@ -192,7 +178,7 @@ private fun WeekRow(
     days: List<LocalDate?>,
     selectedDate: LocalDate,
     dayHighlights: Map<LocalDate, CalendarDayHighlight>,
-    cellWidth: androidx.compose.ui.unit.Dp,
+    cellWidth: Dp,
     onDateClick: (LocalDate) -> Unit
 ) {
     Row(
@@ -222,7 +208,7 @@ private fun CalendarDayCell(
     date: LocalDate?,
     highlight: CalendarDayHighlight,
     isSelected: Boolean,
-    cellWidth: androidx.compose.ui.unit.Dp,
+    cellWidth: Dp,
     onClick: () -> Unit
 ) {
     val shape = MaterialTheme.shapes.medium
@@ -273,6 +259,69 @@ private fun CalendarDayCell(
                 textAlign = TextAlign.Center
             )
         }
+    }
+}
+
+@Composable
+private fun SelectedDayCard(
+    date: LocalDate,
+    details: CalendarDayDetails,
+    onGoToToday: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = "Выбранная дата",
+                style = MaterialTheme.typography.labelLarge
+            )
+
+            Text(
+                text = formatFullDate(date),
+                style = MaterialTheme.typography.bodyLarge
+            )
+
+            Text(
+                text = "Статус: ${highlightLabel(details.highlight)}",
+                style = MaterialTheme.typography.bodyMedium
+            )
+
+            if (details.checkedHabitTitles.isEmpty()) {
+                Text(
+                    text = "За этот день пока нет отметок.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+            } else {
+                Text(
+                    text = "Отмечено:",
+                    style = MaterialTheme.typography.labelLarge
+                )
+
+                details.checkedHabitTitles.forEach { title ->
+                    Text(
+                        text = "• $title",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+            }
+
+            TextButton(onClick = onGoToToday) {
+                Text("Перейти к сегодня")
+            }
+        }
+    }
+}
+
+private fun highlightLabel(highlight: CalendarDayHighlight): String {
+    return when (highlight) {
+        CalendarDayHighlight.RED -> "красный день"
+        CalendarDayHighlight.YELLOW -> "жёлтый день"
+        CalendarDayHighlight.GREEN -> "зелёный день"
+        CalendarDayHighlight.NONE -> "нет отметок"
     }
 }
 
