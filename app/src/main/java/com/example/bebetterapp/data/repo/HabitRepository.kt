@@ -4,6 +4,7 @@ import com.example.bebetterapp.data.db.dao.DayEntryDao
 import com.example.bebetterapp.data.db.dao.HabitDao
 import com.example.bebetterapp.data.db.entity.DayEntryEntity
 import com.example.bebetterapp.data.db.entity.HabitEntity
+import com.example.bebetterapp.domain.model.CalendarDayHighlight
 import com.example.bebetterapp.domain.model.DailyCompletionStat
 import com.example.bebetterapp.domain.model.HabitKey
 import com.example.bebetterapp.domain.model.HabitStat
@@ -13,6 +14,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import java.time.LocalDate
+import java.time.YearMonth
 import java.time.temporal.ChronoUnit
 
 class HabitRepository(
@@ -181,6 +183,43 @@ class HabitRepository(
         }
 
         return result
+    }
+
+    suspend fun getCalendarDayHighlights(month: YearMonth): Map<LocalDate, CalendarDayHighlight> {
+        val start = month.atDay(1)
+        val end = month.atEndOfMonth()
+
+        val habitsById = habitDao.getActiveHabits()
+            .associate { it.id to HabitKey.valueOf(it.key) }
+
+        val checkedEntries = dayEntryDao.getEntriesBetween(start, end)
+            .filter { it.value }
+
+        val checkedKeysByDate: Map<LocalDate, Set<HabitKey>> = checkedEntries
+            .groupBy { it.date }
+            .mapValues { (_, entriesForDay) ->
+                entriesForDay.mapNotNull { entry -> habitsById[entry.habitId] }.toSet()
+            }
+
+        return checkedKeysByDate.mapValues { (_, keys) ->
+            val hasAlcohol = HabitKey.ALCOHOL in keys
+            val hasSport = HabitKey.SPORT in keys
+            val hasSelfDev = HabitKey.SELF_DEV in keys
+
+            val hasGoodWithoutAlcohol =
+                HabitKey.SLEEP_OK in keys ||
+                        HabitKey.SELF_DEV in keys ||
+                        HabitKey.FAMILY in keys ||
+                        HabitKey.SPORT in keys ||
+                        HabitKey.FRIENDS in keys
+
+            when {
+                hasAlcohol && (hasSport || hasSelfDev) -> CalendarDayHighlight.YELLOW
+                hasAlcohol -> CalendarDayHighlight.RED
+                hasGoodWithoutAlcohol -> CalendarDayHighlight.GREEN
+                else -> CalendarDayHighlight.NONE
+            }
+        }
     }
 
     suspend fun getAllTimeRange(): Pair<LocalDate, LocalDate> {

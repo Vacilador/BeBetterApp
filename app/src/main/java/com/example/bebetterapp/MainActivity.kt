@@ -30,7 +30,7 @@ class MainActivity : ComponentActivity() {
         val app = application as BeBetterApp
         val todayVm = TodayViewModel(app.repo)
         val statsVm = StatsViewModel(app.repo)
-        val calendarVm = CalendarViewModel()
+        val calendarVm = CalendarViewModel(app.repo)
 
         setContent {
             MaterialTheme {

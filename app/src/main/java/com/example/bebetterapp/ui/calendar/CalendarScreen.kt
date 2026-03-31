@@ -1,15 +1,17 @@
 package com.example.bebetterapp.ui.calendar
 
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.sizeIn
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
@@ -27,9 +29,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.example.bebetterapp.domain.model.CalendarDayHighlight
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.YearMonth
@@ -44,6 +47,7 @@ fun CalendarScreen(
 ) {
     val currentMonth by vm.currentMonth.collectAsState()
     val selectedDate by vm.selectedDate.collectAsState()
+    val dayHighlights by vm.dayHighlights.collectAsState()
 
     val monthTitle = remember(currentMonth) {
         val formatter = DateTimeFormatter.ofPattern("LLLL yyyy", Locale("ru"))
@@ -102,17 +106,31 @@ fun CalendarScreen(
                         }
                     }
 
-                    WeekDaysHeader()
-
-                    LazyColumn(
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    BoxWithConstraints(
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        items(weeks) { week ->
-                            WeekRow(
-                                days = week,
-                                selectedDate = selectedDate,
-                                onDateClick = vm::selectDate
-                            )
+                        val cellSpacing = 8.dp
+                        val totalSpacing = cellSpacing * 6
+                        val cellWidth = (maxWidth - totalSpacing) / 7
+
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            WeekDaysHeader(cellWidth = cellWidth)
+
+                            LazyColumn(
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                items(weeks) { week ->
+                                    WeekRow(
+                                        days = week,
+                                        selectedDate = selectedDate,
+                                        dayHighlights = dayHighlights,
+                                        cellWidth = cellWidth,
+                                        onDateClick = vm::selectDate
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -145,7 +163,7 @@ fun CalendarScreen(
 }
 
 @Composable
-private fun WeekDaysHeader() {
+private fun WeekDaysHeader(cellWidth: androidx.compose.ui.unit.Dp) {
     val labels = listOf("Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс")
 
     Row(
@@ -155,7 +173,7 @@ private fun WeekDaysHeader() {
         labels.forEach { label ->
             Box(
                 modifier = Modifier
-                    .weight(1f)
+                    .width(cellWidth)
                     .padding(vertical = 4.dp),
                 contentAlignment = Alignment.Center
             ) {
@@ -173,6 +191,8 @@ private fun WeekDaysHeader() {
 private fun WeekRow(
     days: List<LocalDate?>,
     selectedDate: LocalDate,
+    dayHighlights: Map<LocalDate, CalendarDayHighlight>,
+    cellWidth: androidx.compose.ui.unit.Dp,
     onDateClick: (LocalDate) -> Unit
 ) {
     Row(
@@ -182,7 +202,13 @@ private fun WeekRow(
         days.forEach { date ->
             CalendarDayCell(
                 date = date,
+                highlight = if (date != null) {
+                    dayHighlights[date] ?: CalendarDayHighlight.NONE
+                } else {
+                    CalendarDayHighlight.NONE
+                },
                 isSelected = date == selectedDate,
+                cellWidth = cellWidth,
                 onClick = {
                     if (date != null) onDateClick(date)
                 }
@@ -192,30 +218,46 @@ private fun WeekRow(
 }
 
 @Composable
-private fun RowScope.CalendarDayCell(
+private fun CalendarDayCell(
     date: LocalDate?,
+    highlight: CalendarDayHighlight,
     isSelected: Boolean,
+    cellWidth: androidx.compose.ui.unit.Dp,
     onClick: () -> Unit
 ) {
     val shape = MaterialTheme.shapes.medium
 
     val backgroundColor = when {
         date == null -> MaterialTheme.colorScheme.surface
-        isSelected -> MaterialTheme.colorScheme.primaryContainer
-        else -> MaterialTheme.colorScheme.surfaceVariant
+        highlight == CalendarDayHighlight.RED -> Color(0xFFFFCDD2)
+        highlight == CalendarDayHighlight.YELLOW -> Color(0xFFFFF9C4)
+        highlight == CalendarDayHighlight.GREEN -> Color(0xFFC8E6C9)
+        else -> MaterialTheme.colorScheme.surface
     }
 
     val textColor = when {
         date == null -> MaterialTheme.colorScheme.surface
-        isSelected -> MaterialTheme.colorScheme.onPrimaryContainer
-        else -> MaterialTheme.colorScheme.onSurfaceVariant
+        highlight == CalendarDayHighlight.RED -> Color(0xFF7F1D1D)
+        highlight == CalendarDayHighlight.YELLOW -> Color(0xFF7A5D00)
+        highlight == CalendarDayHighlight.GREEN -> Color(0xFF1B5E20)
+        else -> MaterialTheme.colorScheme.onSurface
+    }
+
+    val borderColor = when {
+        isSelected -> MaterialTheme.colorScheme.primary
+        highlight == CalendarDayHighlight.NONE && date != null -> MaterialTheme.colorScheme.outlineVariant
+        else -> Color.Transparent
     }
 
     Surface(
         modifier = Modifier
-            .weight(1f)
+            .width(cellWidth)
             .aspectRatio(1f)
-            .clip(shape)
+            .border(
+                width = if (isSelected) 2.dp else 1.dp,
+                color = borderColor,
+                shape = shape
+            )
             .clickable(enabled = date != null, onClick = onClick),
         color = backgroundColor,
         shape = shape
