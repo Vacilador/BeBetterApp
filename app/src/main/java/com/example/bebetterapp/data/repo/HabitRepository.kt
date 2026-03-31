@@ -7,6 +7,7 @@ import com.example.bebetterapp.data.db.entity.HabitEntity
 import com.example.bebetterapp.domain.model.CalendarDayDetails
 import com.example.bebetterapp.domain.model.CalendarDayHighlight
 import com.example.bebetterapp.domain.model.DailyCompletionStat
+import com.example.bebetterapp.domain.model.DayColorStat
 import com.example.bebetterapp.domain.model.HabitKey
 import com.example.bebetterapp.domain.model.HabitStat
 import com.example.bebetterapp.domain.model.HabitType
@@ -184,6 +185,42 @@ class HabitRepository(
         }
 
         return result
+    }
+
+    suspend fun getDayColorStats(start: LocalDate, end: LocalDate): List<DayColorStat> {
+        val habitsById = habitDao.getActiveHabits()
+            .associate { it.id to HabitKey.valueOf(it.key) }
+
+        val checkedEntries = dayEntryDao.getEntriesBetween(start, end)
+            .filter { it.value }
+
+        val checkedKeysByDate: Map<LocalDate, Set<HabitKey>> = checkedEntries
+            .groupBy { it.date }
+            .mapValues { (_, entriesForDay) ->
+                entriesForDay.mapNotNull { entry -> habitsById[entry.habitId] }.toSet()
+            }
+
+        val counts = mutableMapOf(
+            CalendarDayHighlight.RED to 0,
+            CalendarDayHighlight.YELLOW to 0,
+            CalendarDayHighlight.GREEN to 0,
+            CalendarDayHighlight.NONE to 0
+        )
+
+        var current = start
+        while (!current.isAfter(end)) {
+            val keys = checkedKeysByDate[current].orEmpty()
+            val highlight = highlightFromKeys(keys)
+            counts[highlight] = (counts[highlight] ?: 0) + 1
+            current = current.plusDays(1)
+        }
+
+        return listOf(
+            DayColorStat(CalendarDayHighlight.RED, counts[CalendarDayHighlight.RED] ?: 0),
+            DayColorStat(CalendarDayHighlight.YELLOW, counts[CalendarDayHighlight.YELLOW] ?: 0),
+            DayColorStat(CalendarDayHighlight.GREEN, counts[CalendarDayHighlight.GREEN] ?: 0),
+            DayColorStat(CalendarDayHighlight.NONE, counts[CalendarDayHighlight.NONE] ?: 0)
+        )
     }
 
     suspend fun getCalendarDayHighlights(month: YearMonth): Map<LocalDate, CalendarDayHighlight> {
