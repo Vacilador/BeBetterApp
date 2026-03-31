@@ -1,9 +1,13 @@
 package com.example.bebetterapp.ui.today
 
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CenterAlignedTopAppBar
@@ -12,7 +16,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -30,13 +33,13 @@ import java.util.Locale
 @Composable
 fun TodayScreen(
     vm: TodayViewModel,
-    onOpenStats: () -> Unit = {}
+    onOpenStats: () -> Unit = {},
+    onOpenCalendar: () -> Unit = {}
 ) {
     LaunchedEffect(Unit) { vm.seed() }
 
     val habits by vm.habits.collectAsState()
     val date by vm.date.collectAsState()
-
     val canGoNext by vm.canGoNext.collectAsState()
     val isEditable by vm.isEditable.collectAsState()
 
@@ -47,7 +50,9 @@ fun TodayScreen(
     }
 
     Scaffold(
-        topBar = { CenterAlignedTopAppBar(title = { Text("Стань лучше") }) }
+        topBar = {
+            CenterAlignedTopAppBar(title = { Text("Стань лучше") })
+        }
     ) { padding ->
         Column(
             modifier = Modifier
@@ -56,20 +61,26 @@ fun TodayScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                IconButton(onClick = { vm.prevDay() }) { Text("◀") }
+                IconButton(onClick = { vm.prevDay() }) {
+                    Text("◀")
+                }
 
-                Text(dateText, style = MaterialTheme.typography.titleMedium)
+                Text(
+                    text = dateText,
+                    style = MaterialTheme.typography.titleMedium
+                )
 
                 IconButton(
                     onClick = { vm.nextDay() },
                     enabled = canGoNext
-                ) { Text("▶") }
+                ) {
+                    Text("▶")
+                }
             }
 
             Card {
@@ -89,10 +100,12 @@ fun TodayScreen(
                 Text("Статистика")
             }
 
-            AssistChip(
-                onClick = { /* позже */ },
-                label = { Text("Календарь — скоро") }
-            )
+            Button(
+                onClick = onOpenCalendar,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Календарь")
+            }
         }
     }
 }
@@ -129,11 +142,14 @@ private fun HabitRow(
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Column {
-            Text(habit.titleRu, style = MaterialTheme.typography.bodyLarge)
+            Text(
+                text = habit.titleRu,
+                style = MaterialTheme.typography.bodyLarge
+            )
 
             if (habit.key.trackStreak && habit.streak > 0) {
                 Text(
-                    text = "🔥 ${habit.streak}",
+                    text = " ${habit.streak}",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.primary
                 )

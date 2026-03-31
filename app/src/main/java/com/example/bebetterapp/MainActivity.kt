@@ -9,34 +9,58 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import com.example.bebetterapp.ui.calendar.CalendarScreen
+import com.example.bebetterapp.ui.calendar.CalendarViewModel
 import com.example.bebetterapp.ui.stats.StatsScreen
 import com.example.bebetterapp.ui.stats.StatsViewModel
 import com.example.bebetterapp.ui.today.TodayScreen
 import com.example.bebetterapp.ui.today.TodayViewModel
 
 class MainActivity : ComponentActivity() {
+
+    private enum class AppScreen {
+        TODAY,
+        STATS,
+        CALENDAR
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         val app = application as BeBetterApp
         val todayVm = TodayViewModel(app.repo)
         val statsVm = StatsViewModel(app.repo)
+        val calendarVm = CalendarViewModel()
 
         setContent {
             MaterialTheme {
                 Surface {
-                    var showStats by rememberSaveable { mutableStateOf(false) }
+                    var currentScreen by rememberSaveable {
+                        mutableStateOf(AppScreen.TODAY)
+                    }
 
-                    if (showStats) {
-                        StatsScreen(
-                            vm = statsVm,
-                            onBack = { showStats = false }
-                        )
-                    } else {
-                        TodayScreen(
-                            vm = todayVm,
-                            onOpenStats = { showStats = true }
-                        )
+                    when (currentScreen) {
+                        AppScreen.TODAY -> {
+                            TodayScreen(
+                                vm = todayVm,
+                                onOpenStats = { currentScreen = AppScreen.STATS },
+                                onOpenCalendar = { currentScreen = AppScreen.CALENDAR }
+                            )
+                        }
+
+                        AppScreen.STATS -> {
+                            StatsScreen(
+                                vm = statsVm,
+                                onBack = { currentScreen = AppScreen.TODAY }
+                            )
+                        }
+
+                        AppScreen.CALENDAR -> {
+                            CalendarScreen(
+                                vm = calendarVm,
+                                onBack = { currentScreen = AppScreen.TODAY }
+                            )
+                        }
                     }
                 }
             }
