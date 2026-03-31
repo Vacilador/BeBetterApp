@@ -38,7 +38,7 @@ fun TodayScreen(
 ) {
     LaunchedEffect(Unit) { vm.seed() }
 
-    val habits by vm.habits.collectAsState()
+    val habits by vm.habits.collectAsState(initial = emptyList())
     val date by vm.date.collectAsState()
     val canGoNext by vm.canGoNext.collectAsState()
     val isEditable by vm.isEditable.collectAsState()
