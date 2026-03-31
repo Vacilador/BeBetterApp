@@ -1,16 +1,22 @@
 package com.example.bebetterapp.data.repo
-import com.example.bebetterapp.domain.model.HabitStat
+
 import com.example.bebetterapp.data.db.dao.DayEntryDao
 import com.example.bebetterapp.data.db.dao.HabitDao
 import com.example.bebetterapp.data.db.entity.DayEntryEntity
 import com.example.bebetterapp.data.db.entity.HabitEntity
+import com.example.bebetterapp.domain.model.CalendarDayDetails
+import com.example.bebetterapp.domain.model.CalendarDayHighlight
+import com.example.bebetterapp.domain.model.DailyCompletionStat
 import com.example.bebetterapp.domain.model.HabitKey
+import com.example.bebetterapp.domain.model.HabitStat
 import com.example.bebetterapp.domain.model.HabitType
 import com.example.bebetterapp.domain.model.HabitUi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
-import java.time.LocalDate
 import kotlinx.coroutines.flow.flatMapLatest
+import java.time.LocalDate
+import java.time.YearMonth
+import java.time.temporal.ChronoUnit
 
 class HabitRepository(
     private val habitDao: HabitDao,
@@ -25,7 +31,11 @@ class HabitRepository(
                 titleRu = "Алкоголь",
                 type = HabitType.NEGATIVE
             ),
-            HabitEntity(key = HabitKey.SPORT.name, titleRu = "Спорт", type = HabitType.POSITIVE),
+            HabitEntity(
+                key = HabitKey.SPORT.name,
+                titleRu = "Спорт",
+                type = HabitType.POSITIVE
+            ),
             HabitEntity(
                 key = HabitKey.SLEEP_OK.name,
                 titleRu = "Сон норм",
@@ -36,9 +46,18 @@ class HabitRepository(
                 titleRu = "Саморазвитие",
                 type = HabitType.POSITIVE
             ),
-            HabitEntity(key = HabitKey.FAMILY.name, titleRu = "Семья", type = HabitType.POSITIVE),
-            HabitEntity(key = HabitKey.FRIENDS.name, titleRu = "Друзья", type = HabitType.POSITIVE),
+            HabitEntity(
+                key = HabitKey.FAMILY.name,
+                titleRu = "Семья",
+                type = HabitType.POSITIVE
+            ),
+            HabitEntity(
+                key = HabitKey.FRIENDS.name,
+                titleRu = "Друзья",
+                type = HabitType.POSITIVE
+            ),
         )
+
         habitDao.insertAll(seed)
     }
 
@@ -49,7 +68,6 @@ class HabitRepository(
         ) { habits, entries ->
             val map = entries.associateBy { it.habitId }
 
-            // Тут пока без streak — только базовый список
             habits.map { h ->
                 HabitUi(
                     id = h.id,
@@ -71,7 +89,13 @@ class HabitRepository(
         }
 
     suspend fun setChecked(date: LocalDate, habitId: Long, value: Boolean) {
-        dayEntryDao.upsert(DayEntryEntity(date = date, habitId = habitId, value = value))
+        dayEntryDao.upsert(
+            DayEntryEntity(
+                date = date,
+                habitId = habitId,
+                value = value
+            )
+        )
     }
 
     suspend fun ensureDay(date: LocalDate) {
@@ -81,7 +105,13 @@ class HabitRepository(
 
         val missing = habits
             .filter { it.id !in existingIds }
-            .map { h -> DayEntryEntity(date = date, habitId = h.id, value = false) }
+            .map { h ->
+                DayEntryEntity(
+                    date = date,
+                    habitId = h.id,
+                    value = false
+                )
+            }
 
         if (missing.isNotEmpty()) {
             dayEntryDao.insertAll(missing)
@@ -99,6 +129,7 @@ class HabitRepository(
             streak++
             date = date.minusDays(1)
         }
+
         return streak
     }
 
@@ -109,15 +140,17 @@ class HabitRepository(
         val anyChecked = dayEntryDao.hasAnyChecked(date)
         return !anyChecked
     }
+
     suspend fun getStats(start: LocalDate, end: LocalDate): List<HabitStat> {
         val habits = habitDao.getActiveHabits()
         val entries = dayEntryDao.getEntriesBetween(start, end)
+
         val checkedByHabit = entries
             .filter { it.value }
             .groupingBy { it.habitId }
             .eachCount()
 
-        val totalDays = java.time.temporal.ChronoUnit.DAYS.between(start, end).toInt() + 1
+        val totalDays = ChronoUnit.DAYS.between(start, end).toInt() + 1
 
         return habits.map { h ->
             HabitStat(
@@ -131,10 +164,94 @@ class HabitRepository(
         }
     }
 
+    suspend fun getDailyStats(start: LocalDate, end: LocalDate): List<DailyCompletionStat> {
+        val entries = dayEntryDao.getEntriesBetween(start, end)
+
+        val checkedByDate = entries
+            .filter { it.value }
+            .groupingBy { it.date }
+            .eachCount()
+
+        val result = mutableListOf<DailyCompletionStat>()
+        var current = start
+
+        while (!current.isAfter(end)) {
+            result += DailyCompletionStat(
+                date = current,
+                completedCount = checkedByDate[current] ?: 0
+            )
+            current = current.plusDays(1)
+        }
+
+        return result
+    }
+
+    suspend fun getCalendarDayHighlights(month: YearMonth): Map<LocalDate, CalendarDayHighlight> {
+        val start = month.atDay(1)
+        val end = month.atEndOfMonth()
+
+        val habitsById = habitDao.getActiveHabits()
+            .associate { it.id to HabitKey.valueOf(it.key) }
+
+        val checkedEntries = dayEntryDao.getEntriesBetween(start, end)
+            .filter { it.value }
+
+        val checkedKeysByDate: Map<LocalDate, Set<HabitKey>> = checkedEntries
+            .groupBy { it.date }
+            .mapValues { (_, entriesForDay) ->
+                entriesForDay.mapNotNull { entry -> habitsById[entry.habitId] }.toSet()
+            }
+
+        return checkedKeysByDate.mapValues { (_, keys) ->
+            highlightFromKeys(keys)
+        }
+    }
+
+    suspend fun getCalendarDayDetails(date: LocalDate): CalendarDayDetails {
+        val habitsById = habitDao.getActiveHabits()
+            .associateBy { it.id }
+
+        val checkedEntries = dayEntryDao.getEntriesForDate(date)
+            .filter { it.value }
+
+        val checkedHabits = checkedEntries.mapNotNull { entry ->
+            habitsById[entry.habitId]
+        }
+
+        val checkedKeys = checkedHabits.map { HabitKey.valueOf(it.key) }.toSet()
+        val titles = checkedHabits.map { it.titleRu }.sorted()
+
+        return CalendarDayDetails(
+            highlight = highlightFromKeys(checkedKeys),
+            checkedHabitTitles = titles
+        )
+    }
+
+    private fun highlightFromKeys(keys: Set<HabitKey>): CalendarDayHighlight {
+        val hasAlcohol = HabitKey.ALCOHOL in keys
+        val hasSport = HabitKey.SPORT in keys
+        val hasSelfDev = HabitKey.SELF_DEV in keys
+
+        val hasGoodWithoutAlcohol =
+            HabitKey.SLEEP_OK in keys ||
+                    HabitKey.SELF_DEV in keys ||
+                    HabitKey.FAMILY in keys ||
+                    HabitKey.SPORT in keys ||
+                    HabitKey.FRIENDS in keys
+
+        return when {
+            hasAlcohol && (hasSport || hasSelfDev) -> CalendarDayHighlight.YELLOW
+            hasAlcohol -> CalendarDayHighlight.RED
+            hasGoodWithoutAlcohol -> CalendarDayHighlight.GREEN
+            else -> CalendarDayHighlight.NONE
+        }
+    }
+
     suspend fun getAllTimeRange(): Pair<LocalDate, LocalDate> {
         val min = dayEntryDao.getMinDate() ?: LocalDate.now()
         return min to LocalDate.now()
     }
+
     suspend fun getFirstEntryDate(): LocalDate? {
         return dayEntryDao.getMinDate()
     }

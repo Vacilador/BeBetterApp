@@ -3,6 +3,7 @@ package com.example.bebetterapp.ui.stats
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.bebetterapp.data.repo.HabitRepository
+import com.example.bebetterapp.domain.model.DailyCompletionStat
 import com.example.bebetterapp.domain.model.HabitStat
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -24,6 +25,9 @@ class StatsViewModel(
     private val _stats = MutableStateFlow<List<HabitStat>>(emptyList())
     val stats: StateFlow<List<HabitStat>> = _stats.asStateFlow()
 
+    private val _dailyStats = MutableStateFlow<List<DailyCompletionStat>>(emptyList())
+    val dailyStats: StateFlow<List<DailyCompletionStat>> = _dailyStats.asStateFlow()
+
     private val _selectedRange = MutableStateFlow(StatsRange.DAYS_7)
     val selectedRange: StateFlow<StatsRange> = _selectedRange.asStateFlow()
 
@@ -32,7 +36,6 @@ class StatsViewModel(
 
         viewModelScope.launch {
             val end = LocalDate.now()
-
             val start = when (range) {
                 StatsRange.DAYS_7 -> end.minusDays(6)
                 StatsRange.DAYS_30 -> end.minusDays(29)
@@ -41,6 +44,7 @@ class StatsViewModel(
             }
 
             _stats.value = repo.getStats(start, end)
+            _dailyStats.value = repo.getDailyStats(start, end)
         }
     }
 }
