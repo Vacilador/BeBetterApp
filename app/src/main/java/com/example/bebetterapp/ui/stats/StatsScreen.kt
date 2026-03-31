@@ -1,17 +1,18 @@
 package com.example.bebetterapp.ui.stats
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -31,14 +32,18 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.example.bebetterapp.domain.model.DailyCompletionStat
+import com.example.bebetterapp.domain.model.CalendarDayHighlight
+import com.example.bebetterapp.domain.model.DayColorStat
 import com.example.bebetterapp.domain.model.HabitStat
-import java.time.LocalDate
-import java.time.format.DateTimeFormatter
-import java.util.Locale
+import kotlin.math.cos
+import kotlin.math.roundToInt
+import kotlin.math.sin
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -47,7 +52,7 @@ fun StatsScreen(
     onBack: () -> Unit = {}
 ) {
     val stats by vm.stats.collectAsState()
-    val dailyStats by vm.dailyStats.collectAsState()
+    val dayColorStats by vm.dayColorStats.collectAsState()
     val selectedRange by vm.selectedRange.collectAsState()
 
     var sortOption by remember { mutableStateOf(StatsSortOption.BY_PERCENT) }
@@ -58,11 +63,7 @@ fun StatsScreen(
     }
 
     val visibleStats = remember(stats, hideEmpty) {
-        if (hideEmpty) {
-            stats.filter { it.checkedDays > 0 }
-        } else {
-            stats
-        }
+        if (hideEmpty) stats.filter { it.checkedDays > 0 } else stats
     }
 
     val sortedStats = remember(visibleStats, sortOption) {
@@ -120,8 +121,8 @@ fun StatsScreen(
                 onCheckedChange = { hideEmpty = it }
             )
 
-            DailyBarChart(
-                dailyStats = dailyStats,
+            DayQualityPieChart(
+                stats = dayColorStats,
                 modifier = Modifier.fillMaxWidth()
             )
 
@@ -163,19 +164,16 @@ private fun StatsRangeChips(
             selected = selectedRange == StatsViewModel.StatsRange.DAYS_7,
             onClick = { onRangeSelected(StatsViewModel.StatsRange.DAYS_7) }
         )
-
         StatsChip(
             text = "30д",
             selected = selectedRange == StatsViewModel.StatsRange.DAYS_30,
             onClick = { onRangeSelected(StatsViewModel.StatsRange.DAYS_30) }
         )
-
         StatsChip(
             text = "Год",
             selected = selectedRange == StatsViewModel.StatsRange.YEAR,
             onClick = { onRangeSelected(StatsViewModel.StatsRange.YEAR) }
         )
-
         StatsChip(
             text = "Всё",
             selected = selectedRange == StatsViewModel.StatsRange.ALL,
@@ -206,7 +204,6 @@ private fun StatsSortChips(
                 selected = selectedSort == StatsSortOption.BY_PERCENT,
                 onClick = { onSortSelected(StatsSortOption.BY_PERCENT) }
             )
-
             StatsChip(
                 text = "По выполн.",
                 selected = selectedSort == StatsSortOption.BY_COMPLETIONS,
@@ -266,26 +263,34 @@ private fun StatsChip(
     )
 }
 
+private data class PieSliceUi(
+    val highlight: CalendarDayHighlight,
+    val count: Int,
+    val percent: Int,
+    val startAngle: Float,
+    val sweepAngle: Float
+)
+
 @Composable
-private fun DailyBarChart(
-    dailyStats: List<DailyCompletionStat>,
+private fun DayQualityPieChart(
+    stats: List<DayColorStat>,
     modifier: Modifier = Modifier
 ) {
-    val maxCount = dailyStats.maxOfOrNull { it.completedCount } ?: 0
+    val total = stats.sumOf { it.count }
 
     Card(modifier = modifier) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Text(
-                text = "Выполнения по дням",
+                text = "Качество дней",
                 style = MaterialTheme.typography.titleMedium
             )
 
-            if (dailyStats.isEmpty()) {
+            if (total == 0) {
                 Text(
                     text = "Нет данных для графика.",
                     style = MaterialTheme.typography.bodyMedium
@@ -293,18 +298,93 @@ private fun DailyBarChart(
                 return@Column
             }
 
-            Text(
-                text = "Каждый столбик — количество выполненных привычек за день",
-                style = MaterialTheme.typography.bodySmall
+            val slices = remember(stats, total) {
+                buildList {
+                    var startAngle = -90f
+                    stats.forEach { item ->
+                        val sweep = (item.count.toFloat() / total.toFloat()) * 360f
+                        add(
+                            PieSliceUi(
+                                highlight = item.highlight,
+                                count = item.count,
+                                percent = ((item.count * 100f) / total).roundToInt(),
+                                startAngle = startAngle,
+                                sweepAngle = sweep
+                            )
+                        )
+                        startAngle += sweep
+                    }
+                }
+            }
+
+            PieChartWithLabels(
+                slices = slices,
+                modifier = Modifier.fillMaxWidth()
             )
 
-            LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            Column(
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(dailyStats) { day ->
-                    DayBar(
-                        stat = day,
-                        maxCount = maxCount
+                stats.forEach { item ->
+                    LegendRow(item = item, total = total)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PieChartWithLabels(
+    slices: List<PieSliceUi>,
+    modifier: Modifier = Modifier,
+    chartSize: Dp = 220.dp
+) {
+    BoxWithConstraints(
+        modifier = modifier,
+        contentAlignment = Alignment.Center
+    ) {
+        val boxSize = chartSize
+        val center = chartSize / 2
+        val labelRadius = chartSize * 0.28f
+
+        Box(
+            modifier = Modifier.size(boxSize),
+            contentAlignment = Alignment.Center
+        ) {
+            Canvas(
+                modifier = Modifier.size(chartSize)
+            ) {
+                val strokeWidth = 56.dp.toPx()
+
+                slices.forEach { slice ->
+                    if (slice.sweepAngle > 0f) {
+                        drawArc(
+                            color = pieColor(slice.highlight),
+                            startAngle = slice.startAngle,
+                            sweepAngle = slice.sweepAngle,
+                            useCenter = false,
+                            style = Stroke(width = strokeWidth),
+                            size = Size(size.width, size.height)
+                        )
+                    }
+                }
+            }
+
+            slices.forEach { slice ->
+                if (slice.percent >= 8 && slice.sweepAngle > 0f) {
+                    val midAngle = slice.startAngle + slice.sweepAngle / 2f
+                    val radians = Math.toRadians(midAngle.toDouble())
+                    val dx = (cos(radians) * labelRadius.value).toFloat()
+                    val dy = (sin(radians) * labelRadius.value).toFloat()
+
+                    Text(
+                        text = "${slice.percent}%",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = pieTextColor(slice.highlight),
+                        modifier = Modifier.offset(
+                            x = dx.dp,
+                            y = dy.dp
+                        )
                     )
                 }
             }
@@ -313,59 +393,35 @@ private fun DailyBarChart(
 }
 
 @Composable
-private fun DayBar(
-    stat: DailyCompletionStat,
-    maxCount: Int
+private fun LegendRow(
+    item: DayColorStat,
+    total: Int
 ) {
-    val barFraction = if (maxCount <= 0) {
-        0f
-    } else {
-        stat.completedCount.toFloat() / maxCount.toFloat()
-    }.coerceIn(0f, 1f)
+    val percent = if (total == 0) 0 else ((item.count * 100f) / total).roundToInt()
 
-    val dayFormatter = remember {
-        DateTimeFormatter.ofPattern("dd", Locale.getDefault())
-    }
-
-    val monthFormatter = remember {
-        DateTimeFormatter.ofPattern("MM", Locale.getDefault())
-    }
-
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(6.dp)
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(
-            text = stat.completedCount.toString(),
-            style = MaterialTheme.typography.labelSmall
-        )
-
         Box(
             modifier = Modifier
-                .width(20.dp)
-                .height(120.dp)
-                .clip(MaterialTheme.shapes.small)
-                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .size(16.dp)
+                .background(pieColor(item.highlight))
+        )
+
+        Column(
+            modifier = Modifier.weight(1f)
         ) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .fillMaxHeight(barFraction)
-                    .clip(MaterialTheme.shapes.small)
-                    .background(MaterialTheme.colorScheme.primary)
+            Text(
+                text = legendLabel(item.highlight),
+                style = MaterialTheme.typography.bodyMedium
             )
         }
 
         Text(
-            text = stat.date.format(dayFormatter),
-            style = MaterialTheme.typography.labelSmall
-        )
-
-        Text(
-            text = stat.date.format(monthFormatter),
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            text = "${item.count} дн. · $percent%",
+            style = MaterialTheme.typography.bodySmall
         )
     }
 }
@@ -440,16 +496,39 @@ private fun EmptyStatsState(
                 text = "Пока нет данных",
                 style = MaterialTheme.typography.titleMedium
             )
-
             Text(
                 text = message,
                 style = MaterialTheme.typography.bodyMedium
             )
-
             Text(
                 text = "Отмечай выполнение на главном экране — и здесь появится статистика.",
                 style = MaterialTheme.typography.bodySmall
             )
         }
+    }
+}
+
+private fun pieColor(highlight: CalendarDayHighlight): Color {
+    return when (highlight) {
+        CalendarDayHighlight.RED -> Color(0xFFE57373)
+        CalendarDayHighlight.YELLOW -> Color(0xFFFFF176)
+        CalendarDayHighlight.GREEN -> Color(0xFF81C784)
+        CalendarDayHighlight.NONE -> Color(0xFFF5F5F5)
+    }
+}
+
+private fun pieTextColor(highlight: CalendarDayHighlight): Color {
+    return when (highlight) {
+        CalendarDayHighlight.NONE -> Color(0xFF666666)
+        else -> Color(0xFF222222)
+    }
+}
+
+private fun legendLabel(highlight: CalendarDayHighlight): String {
+    return when (highlight) {
+        CalendarDayHighlight.RED -> "плохие дни"
+        CalendarDayHighlight.YELLOW -> "ты можешь лучше"
+        CalendarDayHighlight.GREEN -> "молодец"
+        CalendarDayHighlight.NONE -> "не забывай становиться лучше"
     }
 }
