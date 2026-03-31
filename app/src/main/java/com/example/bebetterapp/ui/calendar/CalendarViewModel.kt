@@ -3,6 +3,7 @@ package com.example.bebetterapp.ui.calendar
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.bebetterapp.data.repo.HabitRepository
+import com.example.bebetterapp.domain.model.CalendarDayDetails
 import com.example.bebetterapp.domain.model.CalendarDayHighlight
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -26,8 +27,18 @@ class CalendarViewModel(
     val dayHighlights: StateFlow<Map<LocalDate, CalendarDayHighlight>> =
         _dayHighlights.asStateFlow()
 
+    private val _selectedDayDetails = MutableStateFlow(
+        CalendarDayDetails(
+            highlight = CalendarDayHighlight.NONE,
+            checkedHabitTitles = emptyList()
+        )
+    )
+    val selectedDayDetails: StateFlow<CalendarDayDetails> =
+        _selectedDayDetails.asStateFlow()
+
     init {
         loadMonthHighlights()
+        loadSelectedDayDetails()
     }
 
     fun previousMonth() {
@@ -50,6 +61,7 @@ class CalendarViewModel(
         if (oldMonth != newMonth) {
             loadMonthHighlights()
         }
+        loadSelectedDayDetails()
     }
 
     fun goToToday() {
@@ -63,11 +75,18 @@ class CalendarViewModel(
         if (oldMonth != newMonth) {
             loadMonthHighlights()
         }
+        loadSelectedDayDetails()
     }
 
     private fun loadMonthHighlights() {
         viewModelScope.launch {
             _dayHighlights.value = repo.getCalendarDayHighlights(_currentMonth.value)
+        }
+    }
+
+    private fun loadSelectedDayDetails() {
+        viewModelScope.launch {
+            _selectedDayDetails.value = repo.getCalendarDayDetails(_selectedDate.value)
         }
     }
 }

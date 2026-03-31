@@ -4,6 +4,7 @@ import com.example.bebetterapp.data.db.dao.DayEntryDao
 import com.example.bebetterapp.data.db.dao.HabitDao
 import com.example.bebetterapp.data.db.entity.DayEntryEntity
 import com.example.bebetterapp.data.db.entity.HabitEntity
+import com.example.bebetterapp.domain.model.CalendarDayDetails
 import com.example.bebetterapp.domain.model.CalendarDayHighlight
 import com.example.bebetterapp.domain.model.DailyCompletionStat
 import com.example.bebetterapp.domain.model.HabitKey
@@ -202,23 +203,47 @@ class HabitRepository(
             }
 
         return checkedKeysByDate.mapValues { (_, keys) ->
-            val hasAlcohol = HabitKey.ALCOHOL in keys
-            val hasSport = HabitKey.SPORT in keys
-            val hasSelfDev = HabitKey.SELF_DEV in keys
+            highlightFromKeys(keys)
+        }
+    }
 
-            val hasGoodWithoutAlcohol =
-                HabitKey.SLEEP_OK in keys ||
-                        HabitKey.SELF_DEV in keys ||
-                        HabitKey.FAMILY in keys ||
-                        HabitKey.SPORT in keys ||
-                        HabitKey.FRIENDS in keys
+    suspend fun getCalendarDayDetails(date: LocalDate): CalendarDayDetails {
+        val habitsById = habitDao.getActiveHabits()
+            .associateBy { it.id }
 
-            when {
-                hasAlcohol && (hasSport || hasSelfDev) -> CalendarDayHighlight.YELLOW
-                hasAlcohol -> CalendarDayHighlight.RED
-                hasGoodWithoutAlcohol -> CalendarDayHighlight.GREEN
-                else -> CalendarDayHighlight.NONE
-            }
+        val checkedEntries = dayEntryDao.getEntriesForDate(date)
+            .filter { it.value }
+
+        val checkedHabits = checkedEntries.mapNotNull { entry ->
+            habitsById[entry.habitId]
+        }
+
+        val checkedKeys = checkedHabits.map { HabitKey.valueOf(it.key) }.toSet()
+        val titles = checkedHabits.map { it.titleRu }.sorted()
+
+        return CalendarDayDetails(
+            highlight = highlightFromKeys(checkedKeys),
+            checkedHabitTitles = titles
+        )
+    }
+
+    private fun highlightFromKeys(keys: Set<HabitKey>): CalendarDayHighlight {
+        val hasAlcohol = HabitKey.ALCOHOL in keys
+        val hasSport = HabitKey.SPORT in keys
+        val hasSelfDev = HabitKey.SELF_DEV in keys
+
+        val hasGoodWithoutAlcohol =
+            HabitKey.SLEEP_OK in keys ||
+                    HabitKey.SELF_DEV in keys ||
+                    HabitKey.FAMILY in keys ||
+                    HabitKey.SPORT in keys ||
+                    HabitKey.FRIENDS in keys
+
+        return when {
+            hasAlcohol && (hasSport || hasSelfDev) -> CalendarDayHighlight.YELLOW
+            hasAlcohol -> CalendarDayHighlight.RED
+            hasGoodWithoutAlcohol -> CalendarDayHighlight.GREEN
+            else -> CalendarDayHighlight.NONE
         }
     }
 
