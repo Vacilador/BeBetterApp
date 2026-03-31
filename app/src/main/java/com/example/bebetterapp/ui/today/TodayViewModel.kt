@@ -3,69 +3,73 @@ package com.example.bebetterapp.ui.today
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.bebetterapp.data.repo.HabitRepository
-import java.time.LocalDate
+import com.example.bebetterapp.domain.model.HabitUi
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.time.LocalDate
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class TodayViewModel(
     private val repo: HabitRepository
 ) : ViewModel() {
 
-    private val today = LocalDate.now()
+    private val _date = MutableStateFlow(LocalDate.now())
+    val date: StateFlow<LocalDate> = _date.asStateFlow()
 
-    private val selectedDate = MutableStateFlow(LocalDate.now())
-    val date = selectedDate.asStateFlow()
-
-    val habits =
-        selectedDate
-            .flatMapLatest { d -> repo.observeHabitsForDate(d) }
-            .stateIn(
-                scope = viewModelScope,
-                started = SharingStarted.WhileSubscribed(5_000),
-                initialValue = emptyList()
-            )
-
-    val isEditable: StateFlow<Boolean> =
-        date
-            .map { it == today }
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
-
-    val canGoNext: StateFlow<Boolean> =
-        date
-            .map { it.isBefore(today) }
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
-
-    init {
-        viewModelScope.launch {
-            repo.seedIfEmpty()
-            repo.ensureDay(selectedDate.value)
-        }
+    val habits = _date.flatMapLatest { date ->
+        repo.observeHabitsForDate(date)
     }
+
+    private val _canGoNext = MutableStateFlow(false)
+    val canGoNext: StateFlow<Boolean> = _canGoNext.asStateFlow()
+
+    private val _isEditable = MutableStateFlow(true)
+    val isEditable: StateFlow<Boolean> = _isEditable.asStateFlow()
 
     fun seed() {
-        viewModelScope.launch { repo.seedIfEmpty() }
-    }
-
-    fun onToggle(habitId: Long, newValue: Boolean) {
-        viewModelScope.launch { repo.setChecked(selectedDate.value, habitId, newValue) }
+        viewModelScope.launch {
+            repo.seedIfEmpty()
+            syncDateState()
+        }
     }
 
     fun prevDay() {
-        selectedDate.update { it.minusDays(1) }
-        viewModelScope.launch { repo.ensureDay(selectedDate.value) }
+        _date.value = _date.value.minusDays(1)
+        viewModelScope.launch {
+            syncDateState()
+        }
     }
 
     fun nextDay() {
-        if (selectedDate.value.isBefore(today)) {
-            selectedDate.update { it.plusDays(1) }
-            viewModelScope.launch { repo.ensureDay(selectedDate.value) }
+        if (!_canGoNext.value) return
+        _date.value = _date.value.plusDays(1)
+        viewModelScope.launch {
+            syncDateState()
         }
+    }
+
+    fun openDate(date: LocalDate) {
+        _date.value = date
+        viewModelScope.launch {
+            syncDateState()
+        }
+    }
+
+    fun onToggle(habitId: Long, newValue: Boolean) {
+        viewModelScope.launch {
+            repo.setChecked(_date.value, habitId, newValue)
+        }
+    }
+
+    private suspend fun syncDateState() {
+        repo.ensureDay(_date.value)
+
+        val today = LocalDate.now()
+        _canGoNext.value = _date.value.isBefore(today)
+        _isEditable.value = !_date.value.isAfter(today)
     }
 }

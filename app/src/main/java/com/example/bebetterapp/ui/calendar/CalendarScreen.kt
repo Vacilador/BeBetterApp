@@ -45,7 +45,8 @@ import java.util.Locale
 @Composable
 fun CalendarScreen(
     vm: CalendarViewModel,
-    onBack: () -> Unit = {}
+    onBack: () -> Unit = {},
+    onOpenDate: (LocalDate) -> Unit = {}
 ) {
     val currentMonth by vm.currentMonth.collectAsState()
     val selectedDate by vm.selectedDate.collectAsState()
@@ -130,7 +131,10 @@ fun CalendarScreen(
                                         selectedDate = selectedDate,
                                         dayHighlights = dayHighlights,
                                         cellWidth = cellWidth,
-                                        onDateClick = vm::selectDate
+                                        onDateClick = { date ->
+                                            vm.selectDate(date)
+                                            onOpenDate(date)
+                                        }
                                     )
                                 }
                             }
